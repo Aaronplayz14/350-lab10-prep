@@ -4,6 +4,8 @@
 #include <SFML/OpenGL.hpp>
 
 int main() {
+    constexpr unsigned int WINDOW_WIDTH = 1280;
+    constexpr unsigned int WINDOW_HEIGHT = 720;
     // OpenGL settings we request for:
     sf::ContextSettings settings;
     settings.depthBits = 24;   // 24-bit depth buffer
@@ -35,16 +37,41 @@ int main() {
     sf::Shader shader(std::filesystem::path{"main.vert"}, std::filesystem::path{"main.frag"});
     // TODO: eventually add another Shader here which uses the blur fragment shader,
     // also create a sf::RenderTexture...
+    sf::Shader blurShader(std::filesystem::path{"main.vert"}, std::filesystem::path{"blur.frag"});
+    sf::RenderTexture preBlurRenderTexture({WINDOW_WIDTH, WINDOW_HEIGHT});
+
+    const auto startTime = std::chrono::steady_clock::now();
     while (window.isOpen()) {
         while (auto e = window.pollEvent()) {
             if (e->is<sf::Event::Closed>()) {
                 return 0;
             }
         }
-        // TODO: set shader uniforms and eventually draw into
-        // a RenderTexture first before postprocessing into the window target.
+        if (!window.isOpen()) {
+            break;
+        }
+
+        const auto mouse = sf::Mouse::getPosition(window);
+        const sf::Glsl::Vec2 windowSize(static_cast<float>(WINDOW_WIDTH),
+                                        static_cast<float>(WINDOW_HEIGHT));
+        const sf::Glsl::Vec2 mousePosition(static_cast<float>(mouse.x),
+                                           static_cast<float>(WINDOW_HEIGHT) -
+                                               static_cast<float>(mouse.y));
+        const float elapsedTime =
+            std::chrono::duration<float>(std::chrono::steady_clock::now() - startTime).count();
+
+        shader.setUniform("windowSize", windowSize);
+        shader.setUniform("mousePosition", mousePosition);
+        shader.setUniform("elapsedTime", elapsedTime);
+
+        preBlurRenderTexture.clear(sf::Color::Black);
+        preBlurRenderTexture.draw(fullscreenTriangle, &shader);
+        preBlurRenderTexture.display();
+
+        blurShader.setUniform("texture", preBlurRenderTexture.getTexture());
+        blurShader.setUniform("windowSize", windowSize);
         window.clear(sf::Color::Black);
-        window.draw(fullscreenTriangle, &shader);
+        window.draw(fullscreenTriangle, &blurShader);
         window.display();
     }
     return 0;
